@@ -1,11 +1,10 @@
-module Visualization exposing (..)
+module Visualization exposing (CsvRow, view)
 
 import Axis
 import Color exposing (Color)
 import Dict exposing (Dict)
 import Dict.Extra
 import Html exposing (Html, text)
-import Interpolation
 import List.Extra
 import Path exposing (Path)
 import Scale exposing (ContinuousScale, OrdinalScale)
@@ -28,19 +27,6 @@ type alias CsvRow =
     , albumMbid : String
     , track : String
     , trackMbid : String
-    }
-
-
-type alias Data =
-    { months : List MonthData
-    , artists : Dict String String
-    }
-
-
-type alias MonthData =
-    { year : Int
-    , month : Month
-    , data : Dict String Int
     }
 
 
@@ -93,29 +79,32 @@ analyze tz take rows =
                 |> List.take take
                 |> List.concat
 
-        ( firstYear, firstMonth ) =
+        monthOf : Int -> ( Int, Month )
+        monthOf timestamp =
             let
-                at : Time.Posix
-                at =
-                    List.Extra.last cut
-                        |> Maybe.map .at
-                        |> Maybe.withDefault (Time.millisToPosix 0)
+                posix =
+                    Time.millisToPosix timestamp
             in
-            ( Time.toYear tz at
-            , Time.toMonth tz at
+            ( Time.toYear tz posix
+            , Time.toMonth tz posix
             )
 
-        ( lastYear, lastMonth ) =
-            let
-                at : Time.Posix
-                at =
-                    List.head cut
-                        |> Maybe.map .at
-                        |> Maybe.withDefault (Time.millisToPosix 0)
-            in
-            ( Time.toYear tz at
-            , Time.toMonth tz at
-            )
+        ( ( firstYear, firstMonth ), ( lastYear, lastMonth ) ) =
+            List.foldl
+                (\{ at } ( mn, mx ) ->
+                    let
+                        timestamp =
+                            Time.posixToMillis at
+                    in
+                    if mn == 0 then
+                        ( timestamp, timestamp )
+
+                    else
+                        ( min mn timestamp, max mx timestamp )
+                )
+                ( 0, 0 )
+                cut
+                |> Tuple.mapBoth monthOf monthOf
 
         samples : List ( String, List Float )
         samples =
@@ -395,22 +384,3 @@ toArea ( scaleX, scaleY ) ys =
     in
     List.indexedMap mapper ys
         |> Shape.area Shape.monotoneInXCurve
-
-
-interpolator : StackResult String -> StackResult String -> Float -> StackResult String
-interpolator before after t =
-    let
-        extentInterpolator a b =
-            Interpolation.tuple Interpolation.float Interpolation.float a b t
-    in
-    { extent = extentInterpolator before.extent after.extent
-    , labels = List.sort after.labels
-    , values = map2WithOrders (List.map2 extentInterpolator) before.labels after.labels before.values after.values
-    }
-
-
-map2WithOrders : (a -> b -> c) -> List String -> List String -> List a -> List b -> List c
-map2WithOrders fn aOrd bOrd aList bList =
-    List.map2 (\( _, a ) ( _, b ) -> fn a b)
-        (List.sortBy Tuple.first (List.map2 Tuple.pair aOrd aList))
-        (List.sortBy Tuple.first (List.map2 Tuple.pair bOrd bList))
