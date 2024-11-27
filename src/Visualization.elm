@@ -88,6 +88,7 @@ analyze { tz, take, proportional } rows =
         monthOf : Int -> ( Int, Month )
         monthOf timestamp =
             let
+                posix : Time.Posix
                 posix =
                     Time.millisToPosix timestamp
             in
@@ -99,6 +100,7 @@ analyze { tz, take, proportional } rows =
             List.foldl
                 (\{ at } ( mn, mx ) ->
                     let
+                        timestamp : Int
                         timestamp =
                             Time.posixToMillis at
                     in
@@ -189,7 +191,9 @@ analyze { tz, take, proportional } rows =
 
         colorScale : OrdinalScale String Color
         colorScale =
-            List.map Tuple.first samples
+            samples
+                |> List.map Tuple.first
+                |> List.reverse
                 |> Scale.ordinal Scale.Color.category10
 
         timeScale : ContinuousScale Time.Posix
