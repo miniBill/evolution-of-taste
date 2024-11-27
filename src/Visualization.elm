@@ -68,16 +68,7 @@ view : Time.Zone -> Int -> List CsvRow -> Html msg
 view tz count rows =
     let
         { stacks, timeScale, colorScale } =
-            rows
-                |> List.filter
-                    (\{ at } ->
-                        Time.posixToMillis at
-                            > Time.posixToMillis
-                                (Time.Extra.partsToPosix tz
-                                    (Time.Extra.Parts 2019 Jan 21 0 0 0 0)
-                                )
-                    )
-                |> analyze tz count
+            analyze tz count rows
     in
     innerView tz stacks timeScale colorScale
 
