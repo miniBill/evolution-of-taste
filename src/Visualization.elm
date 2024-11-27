@@ -46,17 +46,17 @@ type alias MonthData =
 
 w : Float
 w =
-    990
+    1920 / 1.5
 
 
 h : Float
 h =
-    504
+    1080 / 1.5
 
 
 labelsWidth : Float
 labelsWidth =
-    50
+    100
 
 
 padding : Float
@@ -64,8 +64,8 @@ padding =
     40
 
 
-view : Time.Zone -> List CsvRow -> Html msg
-view tz rows =
+view : Time.Zone -> Int -> List CsvRow -> Html msg
+view tz count rows =
     let
         { stacks, timeScale, colorScale } =
             rows
@@ -77,26 +77,36 @@ view tz rows =
                                     (Time.Extra.Parts 2019 Jan 21 0 0 0 0)
                                 )
                     )
-                |> analyze tz
+                |> analyze tz count
     in
     innerView tz stacks timeScale colorScale
 
 
 analyze :
     Time.Zone
+    -> Int
     -> List CsvRow
     ->
         { stacks : StackResult String
         , timeScale : ContinuousScale Time.Posix
         , colorScale : OrdinalScale String Color
         }
-analyze tz rows =
+analyze tz take rows =
     let
+        cut : List CsvRow
+        cut =
+            rows
+                |> Dict.Extra.groupBy (\{ artist } -> artist)
+                |> Dict.values
+                |> List.sortBy (\p -> -(List.length p))
+                |> List.take take
+                |> List.concat
+
         ( firstYear, firstMonth ) =
             let
                 at : Time.Posix
                 at =
-                    List.Extra.last rows
+                    List.Extra.last cut
                         |> Maybe.map .at
                         |> Maybe.withDefault (Time.millisToPosix 0)
             in
@@ -108,7 +118,7 @@ analyze tz rows =
             let
                 at : Time.Posix
                 at =
-                    List.head rows
+                    List.head cut
                         |> Maybe.map .at
                         |> Maybe.withDefault (Time.millisToPosix 0)
             in
@@ -118,7 +128,7 @@ analyze tz rows =
 
         samples : List ( String, List Float )
         samples =
-            rows
+            cut
                 |> Dict.Extra.groupBy
                     (\{ at } ->
                         ( Time.toYear tz at
@@ -129,33 +139,30 @@ analyze tz rows =
                 |> List.concatMap
                     (\( month, data ) ->
                         let
-                            cut =
+                            grouped : List ( String, Int )
+                            grouped =
                                 data
-                                    |> Dict.Extra.groupBy
-                                        (\{ artist, artistMbid } ->
-                                            ( artist, artistMbid )
-                                        )
+                                    |> Dict.Extra.groupBy (\{ artist } -> artist)
                                     |> Dict.map (\_ t -> List.length t)
                                     |> Dict.toList
-                                    |> List.sortBy (\( _, v ) -> -v)
-                                    |> List.take 5
 
+                            monthTotal : Int
                             monthTotal =
-                                cut
+                                grouped
                                     |> List.map Tuple.second
                                     |> List.sum
                         in
                         List.map
                             (\( artist, count ) ->
                                 ( artist
-                                , ( month, 100 * toFloat count / toFloat monthTotal )
+                                , ( month, toFloat count * 100 / toFloat monthTotal )
                                 )
                             )
-                            cut
+                            grouped
                     )
                 |> Dict.Extra.groupBy Tuple.first
                 |> Dict.map
-                    (\( artist, _ ) values ->
+                    (\_ values ->
                         let
                             dict : Dict ( Int, Int ) Float
                             dict =
@@ -163,8 +170,7 @@ analyze tz rows =
                                     |> List.map Tuple.second
                                     |> Dict.fromList
                         in
-                        ( artist
-                        , List.range firstYear lastYear
+                        List.range firstYear lastYear
                             |> List.concatMap
                                 (\year ->
                                     monthRange
@@ -186,10 +192,8 @@ analyze tz rows =
                                                     |> Maybe.withDefault 0
                                             )
                                 )
-                        )
                     )
-                |> Dict.values
-                |> Debug.log "samples"
+                |> Dict.toList
 
         colorScale : OrdinalScale String Color
         colorScale =

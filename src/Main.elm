@@ -16,7 +16,7 @@ type Model
     = GettingTimezone
     | SelectingCsvFile Time.Zone
     | CsvDecodeError String
-    | Loaded Time.Zone (List CsvRow)
+    | Loaded { tz : Time.Zone, count : String, rows : List CsvRow }
 
 
 type Msg
@@ -24,6 +24,7 @@ type Msg
     | SelectedFile Time.Zone File
     | ReadFile Time.Zone String
     | GotTimezone Time.Zone
+    | Count String
 
 
 main : Program () Model Msg
@@ -61,9 +62,24 @@ view model =
             CsvDecodeError e ->
                 [ Html.p [] [ Html.text ("There was an error reading your CSV file: " ++ e) ] ]
 
-            Loaded tz rows ->
-                [ Html.p [] [ Html.text ("Loaded " ++ String.fromInt (List.length rows) ++ " rows") ]
-                , Visualization.view tz rows
+            Loaded { tz, count, rows } ->
+                [ Html.p []
+                    [ Html.text
+                        "Show top "
+                    , Html.input
+                        [ Html.Events.onInput Count
+                        , Html.Attributes.value count
+                        , Html.Attributes.type_ "number"
+                        , Html.Attributes.min "1"
+                        ]
+                        []
+                    ]
+                , case String.toInt count of
+                    Nothing ->
+                        Html.text "Invalid number"
+
+                    Just take ->
+                        Visualization.view tz take rows
                 ]
     }
 
@@ -85,8 +101,16 @@ update msg model =
                 Err e ->
                     ( CsvDecodeError (Csv.Decode.errorToString e), Cmd.none )
 
-                Ok result ->
-                    ( Loaded tz result, Cmd.none )
+                Ok rows ->
+                    ( Loaded { tz = tz, count = "10", rows = rows }, Cmd.none )
+
+        Count count ->
+            case model of
+                Loaded loaded ->
+                    ( Loaded { loaded | count = count }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
 
 
 csvRowDecoder : Csv.Decode.Decoder CsvRow
