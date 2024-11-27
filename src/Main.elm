@@ -16,7 +16,12 @@ type Model
     = GettingTimezone
     | SelectingCsvFile Time.Zone
     | CsvDecodeError String
-    | Loaded { tz : Time.Zone, count : String, rows : List CsvRow }
+    | Loaded
+        { tz : Time.Zone
+        , count : String
+        , rows : List CsvRow
+        , proportional : Bool
+        }
 
 
 type Msg
@@ -25,6 +30,7 @@ type Msg
     | ReadFile Time.Zone String
     | GotTimezone Time.Zone
     | Count String
+    | Proportional Bool
 
 
 main : Program () Model Msg
@@ -62,7 +68,7 @@ view model =
             CsvDecodeError e ->
                 [ Html.p [] [ Html.text ("There was an error reading your CSV file: " ++ e) ] ]
 
-            Loaded { tz, count, rows } ->
+            Loaded { tz, count, rows, proportional } ->
                 [ Html.p []
                     [ Html.text
                         "Show top "
@@ -74,12 +80,27 @@ view model =
                         ]
                         []
                     ]
+                , Html.label []
+                    [ Html.text
+                        "Show proportional "
+                    , Html.input
+                        [ Html.Events.onCheck Proportional
+                        , Html.Attributes.checked proportional
+                        , Html.Attributes.type_ "checkbox"
+                        ]
+                        []
+                    ]
                 , case String.toInt count of
                     Nothing ->
                         Html.text "Invalid number"
 
                     Just take ->
-                        Visualization.view tz take rows
+                        Visualization.view
+                            { tz = tz
+                            , take = take
+                            , proportional = proportional
+                            }
+                            rows
                 ]
     }
 
@@ -102,12 +123,27 @@ update msg model =
                     ( CsvDecodeError (Csv.Decode.errorToString e), Cmd.none )
 
                 Ok rows ->
-                    ( Loaded { tz = tz, count = "10", rows = rows }, Cmd.none )
+                    ( Loaded
+                        { tz = tz
+                        , count = "10"
+                        , rows = rows
+                        , proportional = True
+                        }
+                    , Cmd.none
+                    )
 
         Count count ->
             case model of
                 Loaded loaded ->
                     ( Loaded { loaded | count = count }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        Proportional proportional ->
+            case model of
+                Loaded loaded ->
+                    ( Loaded { loaded | proportional = proportional }, Cmd.none )
 
                 _ ->
                     ( model, Cmd.none )

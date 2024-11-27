@@ -30,6 +30,13 @@ type alias CsvRow =
     }
 
 
+type alias Config =
+    { tz : Time.Zone
+    , take : Int
+    , proportional : Bool
+    }
+
+
 w : Float
 w =
     1920 / 1.5
@@ -50,25 +57,24 @@ padding =
     40
 
 
-view : Time.Zone -> Int -> List CsvRow -> Html msg
-view tz count rows =
+view : Config -> List CsvRow -> Html msg
+view config rows =
     let
         { stacks, timeScale, colorScale } =
-            analyze tz count rows
+            analyze config rows
     in
-    innerView tz stacks timeScale colorScale
+    innerView stacks timeScale colorScale
 
 
 analyze :
-    Time.Zone
-    -> Int
+    Config
     -> List CsvRow
     ->
         { stacks : StackResult String
         , timeScale : ContinuousScale Time.Posix
         , colorScale : OrdinalScale String Color
         }
-analyze tz take rows =
+analyze { tz, take, proportional } rows =
     let
         cut : List CsvRow
         cut =
@@ -135,7 +141,13 @@ analyze tz take rows =
                         List.map
                             (\( artist, count ) ->
                                 ( artist
-                                , ( month, toFloat count * 100 / toFloat monthTotal )
+                                , ( month
+                                  , if proportional then
+                                        toFloat count * 100 / toFloat monthTotal
+
+                                    else
+                                        toFloat count
+                                  )
                                 )
                             )
                             grouped
@@ -291,8 +303,8 @@ monthToInt month =
             12
 
 
-innerView : Time.Zone -> StackResult String -> ContinuousScale Time.Posix -> OrdinalScale String Color -> Svg msg
-innerView _ { values, labels, extent } timeScale colorScale =
+innerView : StackResult String -> ContinuousScale Time.Posix -> OrdinalScale String Color -> Svg msg
+innerView { values, labels, extent } timeScale colorScale =
     let
         sampleColor : String -> Color
         sampleColor label =
